@@ -20,21 +20,19 @@ class QMCalculator(Calculator):
 
     def __init__(self, pdb_file: str, model_path: str,
                  precision: str = "fp32", device: str = "cpu",
-                 batch_size: int = 64, **kwargs):
+                 batch_size: int = 64, system_xml: str = "", **kwargs):
         super().__init__(**kwargs)
         if not _HAS_CXX:
             raise RuntimeError(
-                "C++ module 'libeegmfcc_solver' not found. "
-                "Build it first:\n"
-                "  cd source/calculators/cxx\n"
-                "  cmake -B build && cmake --build build\n"
-                "  cp build/libeegmfcc_solver*.so ../\n"
+                "C++ module 'libeegmfcc_solver' not found."
+                "  Build it: cd source/cxx && bash compile.sh"
             )
         self._solver = libeegmfcc_solver.EEGMFCCSolver(
-            pdb_file, model_path, precision, device, batch_size)
+            pdb_file, model_path, precision, device, batch_size, system_xml)
 
     def calculate(self, atoms, properties, system_changes):
         Calculator.calculate(self, atoms, properties, system_changes)
-        energy, forces = self._solver.compute(atoms.numbers, atoms.positions)
-        self.results["energy"] = energy
-        self.results["forces"] = forces
+        qm_energy, qm_forces = self._solver.compute_qm(atoms.positions)
+        mm_energy, mm_forces = self._solver.compute_mm(atoms.positions)
+        self.results["energy"] = qm_energy + mm_energy
+        self.results["forces"] = qm_forces + mm_forces

@@ -1,4 +1,8 @@
+#include "meika/pdb.h"
+
 #include "eegmfcc_solver.h"
+
+#include <pybind11/stl.h>
 
 #include <algorithm>
 #include <cmath>
@@ -7,29 +11,23 @@
 #include <set>
 #include <vector>
 
-#include <pybind11/stl.h>
-
-#include "meika/pdb.h"
-
-// ===================================================================
-//  Constructor
-// ===================================================================
-
 EEGMFCCSolver::EEGMFCCSolver(const std::string &pdb_file,
                              const std::string &model_path,
                              const std::string &precision,
-                             const std::string &device, int batch_size)
+                             const std::string &device, int batch_size,
+                             const std::string &system_xml)
     : sys_(meika::pdb::readPDB(pdb_file)) {
     n_atoms_ = sys_.n;
     map_name_to_z();
     pre_frag();
-    solver_ =
-        std::make_unique<MaceSolver>(model_path, precision, device, batch_size);
-}
 
-// ===================================================================
-//  Init helpers
-// ===================================================================
+    mace_solver_ =
+        std::make_unique<MaceSolver>(model_path, precision, device, batch_size);
+    if (!system_xml.empty()) {
+        nb_solver_ =
+            std::make_unique<NonBondedSolver>(system_xml, exclude_pairs_);
+    }
+}
 
 void EEGMFCCSolver::map_name_to_z() {
     const auto &elem_map = meika::system::get_name_to_atomic_number_map();
@@ -43,11 +41,11 @@ void EEGMFCCSolver::map_name_to_z() {
 std::vector<std::vector<int>> EEGMFCCSolver::frag2atom() {
     const auto ter_res_set =
         std::set<int>(sys_.ter_res.begin(), sys_.ter_res.end());
-    const std::size_t num_residues =
+    const size_t num_residues =
         *(std::max_element(sys_.res_idx.begin(), sys_.res_idx.end())) + 1;
 
     std::vector<std::vector<int>> frag_atom(num_residues);
-    for (std::size_t i = 0; i < sys_.res_idx.size(); ++i) {
+    for (size_t i = 0; i < sys_.res_idx.size(); ++i) {
         auto &res = sys_.res_idx[i];
         if (sys_.name[i] == "O3'" and ter_res_set.count(sys_.res_idx[i]) == 0) {
             res++;
@@ -60,7 +58,7 @@ std::vector<std::vector<int>> EEGMFCCSolver::frag2atom() {
 
 std::vector<std::pair<int, int>> EEGMFCCSolver::split_chain() const {
     std::vector<std::pair<int, int>> output;
-    for (std::size_t i = 0; i < sys_.ter_res.size(); ++i) {
+    for (size_t i = 0; i < sys_.ter_res.size(); ++i) {
         auto chain_start = i == 0 ? sys_.res_idx[0] : sys_.ter_res[i - 1] + 1;
         auto chain_ter = sys_.ter_res[i];
         output.emplace_back(chain_start, chain_ter);
@@ -84,7 +82,7 @@ void EEGMFCCSolver::pre_frag() {
                                  std::to_string(ridx));
     };
 
-    for (std::size_t i = 0; i < regions.size(); ++i) {
+    for (size_t i = 0; i < regions.size(); ++i) {
         const auto res_begin = regions[i].first;
         const auto res_end = regions[i].second;
 
@@ -147,25 +145,20 @@ void EEGMFCCSolver::pre_frag() {
     }
 }
 
-// ===================================================================
-//  compute() — push fragments directly into solver pinned memory
-// ===================================================================
-
 std::tuple<double, py::array_t<double>>
-EEGMFCCSolver::compute(py::array_t<int32_t> /*atomic_numbers_py*/,
-                       py::array_t<double> positions_py) {
+EEGMFCCSolver::compute_qm(py::array_t<double> positions_py) {
     auto buf_pos = positions_py.request();
     const double *pos = static_cast<const double *>(buf_pos.ptr);
     size_t n_atoms = buf_pos.shape[0];
 
-    py::array_t<double> forces_arr(
+    py::array_t<double> qm_forces(
         std::vector<py::ssize_t>{static_cast<py::ssize_t>(n_atoms), 3});
-    double *force_ptr = forces_arr.mutable_data();
+    double *force_ptr = qm_forces.mutable_data();
     std::memset(force_ptr, 0, n_atoms * 3 * sizeof(double));
 
-    double total_energy = 0.0;
+    double qm_energy = 0.0;
 
-    solver_->begin_batch();
+    mace_solver_->begin_batch();
     size_t chunk_start = 0; // fragment index where current batch starts
 
     for (size_t fi = 0; fi < fragments_.size(); ++fi) {
@@ -201,15 +194,15 @@ EEGMFCCSolver::compute(py::array_t<int32_t> /*atomic_numbers_py*/,
         }
 
         // ---- push directly into solver's pinned memory ----
-        bool full = solver_->push(std::move(z), std::move(coord));
+        bool full = mace_solver_->push(std::move(z), std::move(coord));
 
         if (full || fi == fragments_.size() - 1) {
-            auto results = solver_->flush();
+            auto results = mace_solver_->flush();
 
             for (size_t ri = 0; ri < results.size(); ++ri) {
                 const auto &rfrag = fragments_[chunk_start + ri];
                 int sign = rfrag.sign;
-                total_energy += sign * results[ri].energy;
+                qm_energy += sign * results[ri].energy;
 
                 for (size_t k = 0; k < rfrag.atoms.size(); ++k) {
                     int gi = rfrag.atoms[k];
@@ -225,30 +218,45 @@ EEGMFCCSolver::compute(py::array_t<int32_t> /*atomic_numbers_py*/,
         }
     }
 
-    return {total_energy, forces_arr};
+    return {qm_energy, qm_forces};
 }
 
-// ===================================================================
-//  pybind11 module
-// ===================================================================
+std::tuple<double, py::array_t<double>>
+EEGMFCCSolver::compute_mm(py::array_t<double> positions_py) {
+    if (!nb_solver_) {
+        throw std::runtime_error(
+            "EEGMFCCSolver: system_xml not provided, MM unavailable.");
+    }
+    auto buf = positions_py.request();
+    const double *pos = static_cast<const double *>(buf.ptr);
+    size_t n = buf.shape[0];
+
+    std::vector<double> pos_vec(n * 3);
+    std::memcpy(pos_vec.data(), pos, pos_vec.size() * sizeof(double));
+
+    auto [mm_energy, forces] = nb_solver_->compute(pos_vec);
+
+    py::array_t<double> mm_forces(
+        std::vector<py::ssize_t>{static_cast<py::ssize_t>(n), 3});
+    std::memcpy(mm_forces.mutable_data(), forces.data(),
+                forces.size() * sizeof(double));
+
+    return {mm_energy, mm_forces};
+}
 
 PYBIND11_MODULE(libeegmfcc_solver, m) {
     m.doc() = "EEGMFCC-style QM solver with pybind11 bindings";
 
     py::class_<EEGMFCCSolver>(m, "EEGMFCCSolver")
         .def(py::init<const std::string &, const std::string &,
-                      const std::string &, const std::string &, int>(),
+                      const std::string &, const std::string &, int,
+                      const std::string &>(),
              py::arg("pdb_file"), py::arg("model_path"),
              py::arg("precision") = "fp32", py::arg("device") = "cpu",
-             py::arg("batch_size") = 64,
+             py::arg("batch_size") = 64, py::arg("system_xml") = "",
              "Initialise from a PDB file and MACE model.")
-        .def("compute", &EEGMFCCSolver::compute, py::arg("atomic_numbers"),
-             py::arg("positions"),
-             "Compute QM energy and forces.\n\n"
-             "Args:\n"
-             "    atomic_numbers: ndarray (n_atoms,) int32\n"
-             "    positions:      ndarray (n_atoms, 3) float64\n"
-             "Returns:\n"
-             "    energy: float\n"
-             "    forces: ndarray (n_atoms, 3) float64\n");
+        .def("compute", &EEGMFCCSolver::compute_qm, py::arg("positions"),
+             "Compute QM energy and forces.\n\n")
+        .def("compute_mm", &EEGMFCCSolver::compute_mm, py::arg("positions"),
+             "Compute MM nonbonded energy and forces.");
 }

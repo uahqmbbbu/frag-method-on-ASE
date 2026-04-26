@@ -2,6 +2,7 @@
 """QMMM MD entry point."""
 
 import argparse
+import os
 
 from ase import Atoms
 from ase.io import read
@@ -9,7 +10,37 @@ from ase.md.langevin import Langevin
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 from ase.units import fs, kcal, mol
 
+from ase.io import read as ase_read
+
 from calculators import QMMM, MMCalculator, QMCalculator
+from calculators.prepare_mm import prepare
+
+
+def auto_selection(full_pdb: str, qm_pdb: str) -> list[int]:
+    """Match QM-PDB atoms to full-system PDB atoms by number+type+residue.
+
+    Returns 0-based indices into the full system.
+    """
+    full = ase_read(full_pdb)
+    qm = ase_read(qm_pdb)
+
+    indices = []
+    qm_i = 0
+    for fi in range(len(full)):
+        if qm_i >= len(qm):
+            break
+        if (full.numbers[fi] == qm.numbers[qm_i]
+            and full.arrays["atomtypes"][fi] == qm.arrays["atomtypes"][qm_i]
+            and full.arrays["residuenumbers"][fi] == qm.arrays["residuenumbers"][qm_i]):
+            indices.append(fi)
+            qm_i += 1
+
+    if len(indices) != len(qm):
+        raise RuntimeError(
+            f"auto-selection matched {len(indices)} of {len(qm)} QM atoms. "
+            "Ensure --qm-pdb atoms exist in -f PDB in the same order."
+        )
+    return indices
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -22,10 +53,9 @@ def build_parser() -> argparse.ArgumentParser:
     sys_group.add_argument("--format", type=str, default=None,
                            help="File format (overrides auto-detection).")
 
-    # === QM region ===
-    qm_group = parser.add_argument_group("QM region")
-    qm_group.add_argument("--selection", type=int, nargs="+", required=True,
-                          help="Atom indices (0-based) in the QM region.")
+    qm_group = parser.add_argument_group("QMCalc")
+    qm_group.add_argument("--selection", type=int, nargs="+", default=None,
+                          help="QM atom indices (0-based). If omitted, auto-detected from --qm-pdb.")
     qm_group.add_argument("--qm-pdb", type=str, required=True,
                           help="PDB file for QM calculator topology.")
     qm_group.add_argument("--qm-model", type=str, required=True,
@@ -40,6 +70,18 @@ def build_parser() -> argparse.ArgumentParser:
                           help="QM fragment batch size (default: 64).")
     qm_group.add_argument("--vacuum", action="store_true", default=False,
                           help="Remove net translation of QM forces.")
+
+    mm_group = parser.add_argument_group("MM")
+    mm_group.add_argument("--force-fields", type=str, nargs="+", required=True,
+                          help="Force field XML files (e.g. amber14-all.xml tip3p.xml).")
+    mm_group.add_argument("--mm-dir", type=str, default="mm_params",
+                          help="Output directory for MM XML files (default: mm_params).")
+    mm_group.add_argument("--mm-pbc", action="store_true", default=False,
+                          help="Use PME (default: NoCutoff).")
+    mm_group.add_argument("--mm-cutoff", type=float, default=1.0,
+                          help="Nonbonded cutoff in nm (default: 1.0).")
+    mm_group.add_argument("--mm-no-shake", action="store_true", default=False,
+                          help="H-bond constraints.")
 
     # === MD ===
     md_group = parser.add_argument_group("MD")
@@ -71,19 +113,39 @@ def main():
     # === System ===
     atoms: Atoms = read(args.file, format=args.format)
 
+    # resolve QM selection — auto-detect from PDB if not given
+    selection = args.selection
+    if selection is None:
+        selection = auto_selection(args.file, args.qm_pdb)
+        print(f"Auto-detected QM selection ({len(selection)} atoms): "
+              f"{selection[:10]}{'...' if len(selection) > 10 else ''}")
+
+    # prepare MM XML files — one call per calculator
+    mm_xml_qm = prepare(args.qm_pdb, args.force_fields,
+                        output_dir=os.path.join(args.mm_dir, "qm"),
+                        pbc=False, cutoff=args.mm_cutoff,
+                        shake_h=not args.mm_no_shake)
+    mm_xml_full = prepare(args.file, args.force_fields,
+                          output_dir=os.path.join(args.mm_dir, "full"),
+                          pbc=args.mm_pbc, cutoff=args.mm_cutoff,
+                          shake_h=not args.mm_no_shake)
+
     # === Calculators ===
     qmcalc = QMCalculator(pdb_file=args.qm_pdb,
                           model_path=args.qm_model,
                           precision=args.qm_precision,
                           device=args.qm_device,
-                          batch_size=args.qm_batch_size)
-    mmcalc = MMCalculator()
+                          batch_size=args.qm_batch_size,
+                          system_xml=mm_xml_qm.system_xml)
+
+    mmcalc1 = MMCalculator(mm_xml_qm)
+    mmcalc2 = MMCalculator(mm_xml_full)
 
     qmmm = QMMM(
-        selection=args.selection,
+        selection=selection,
         qmcalc=qmcalc,
-        mmcalc1=mmcalc,
-        mmcalc2=mmcalc,
+        mmcalc1=mmcalc1,
+        mmcalc2=mmcalc2,
         vacuum=args.vacuum,
     )
     atoms.calc = qmmm

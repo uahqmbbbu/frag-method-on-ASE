@@ -9,6 +9,7 @@ if [[ -z "$CONDA_PREFIX" ]]; then
     echo "Error: conda env '$CONDA_ENV' not found." >&2
     exit 1
 fi
+export CONDA_PREFIX
 
 PYBIND11_PREFIX="${CONDA_PREFIX}/lib/python3.10/site-packages/pybind11"
 export TORCH_PREFIX=/home/public/soft/libtorch-cxx11-2.4.1-cu121/

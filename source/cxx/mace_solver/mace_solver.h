@@ -1,10 +1,10 @@
 #pragma once
 
+#include <torch/script.h>
+
 #include <memory>
 #include <string>
 #include <vector>
-
-#include <torch/script.h>
 
 /// Output for a single structure in a batch.
 struct MaceOutput {
