@@ -3,13 +3,14 @@
 #include <memory>
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 
-#include "meika/system.h"
 #include "mace_solver/mace_solver.h"
+#include "meika/system.h"
 
 namespace py = pybind11;
 
@@ -29,11 +30,9 @@ struct FragInfo {
 
 class EEGMFCCSolver {
   public:
-    EEGMFCCSolver(const std::string &pdb_file,
-                  const std::string &model_path,
+    EEGMFCCSolver(const std::string &pdb_file, const std::string &model_path,
                   const std::string &precision = "fp32",
-                  const std::string &device = "cpu",
-                  int batch_size = 64);
+                  const std::string &device = "cpu", int batch_size = 64);
 
     std::tuple<double, py::array_t<double>>
     compute(py::array_t<int32_t> atomic_numbers_py,
@@ -50,4 +49,6 @@ class EEGMFCCSolver {
     std::vector<std::vector<int>> frag2atom();
     std::vector<std::pair<int, int>> split_chain() const;
     void pre_frag();
+
+    std::vector<std::pair<int, int>> exclude_pairs_;
 };

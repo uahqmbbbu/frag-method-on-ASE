@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <map>
 #include <set>
 #include <vector>
 
@@ -15,16 +16,15 @@
 // ===================================================================
 
 EEGMFCCSolver::EEGMFCCSolver(const std::string &pdb_file,
-                              const std::string &model_path,
-                              const std::string &precision,
-                              const std::string &device,
-                              int batch_size)
+                             const std::string &model_path,
+                             const std::string &precision,
+                             const std::string &device, int batch_size)
     : sys_(meika::pdb::readPDB(pdb_file)) {
     n_atoms_ = sys_.n;
     map_name_to_z();
     pre_frag();
-    solver_ = std::make_unique<MaceSolver>(model_path, precision, device,
-                                           batch_size);
+    solver_ =
+        std::make_unique<MaceSolver>(model_path, precision, device, batch_size);
 }
 
 // ===================================================================
@@ -130,6 +130,21 @@ void EEGMFCCSolver::pre_frag() {
             fragments_.push_back(std::move(frag));
         }
     }
+
+    std::map<std::pair<int, int>, int> exclude_count;
+    for (const auto &frag : fragments_) {
+        for (size_t a = 0; a < frag.atoms.size(); ++a) {
+            for (size_t b = a + 1; b < frag.atoms.size(); ++b) {
+                int i = frag.atoms[a];
+                int j = frag.atoms[b];
+                if (i > j) std::swap(i, j);
+                exclude_count[{i, j}] += frag.sign;
+            }
+        }
+    }
+    for (const auto &kv : exclude_count) {
+        if (kv.second > 0) { exclude_pairs_.push_back(kv.first); }
+    }
 }
 
 // ===================================================================
@@ -151,7 +166,7 @@ EEGMFCCSolver::compute(py::array_t<int32_t> /*atomic_numbers_py*/,
     double total_energy = 0.0;
 
     solver_->begin_batch();
-    size_t chunk_start = 0;   // fragment index where current batch starts
+    size_t chunk_start = 0; // fragment index where current batch starts
 
     for (size_t fi = 0; fi < fragments_.size(); ++fi) {
         const auto &frag = fragments_[fi];
@@ -186,7 +201,7 @@ EEGMFCCSolver::compute(py::array_t<int32_t> /*atomic_numbers_py*/,
         }
 
         // ---- push directly into solver's pinned memory ----
-        bool full = solver_->push(z, coord);
+        bool full = solver_->push(std::move(z), std::move(coord));
 
         if (full || fi == fragments_.size() - 1) {
             auto results = solver_->flush();
@@ -198,9 +213,12 @@ EEGMFCCSolver::compute(py::array_t<int32_t> /*atomic_numbers_py*/,
 
                 for (size_t k = 0; k < rfrag.atoms.size(); ++k) {
                     int gi = rfrag.atoms[k];
-                    force_ptr[3 * gi + 0] += sign * results[ri].forces[3 * k + 0];
-                    force_ptr[3 * gi + 1] += sign * results[ri].forces[3 * k + 1];
-                    force_ptr[3 * gi + 2] += sign * results[ri].forces[3 * k + 2];
+                    force_ptr[3 * gi + 0] +=
+                        sign * results[ri].forces[3 * k + 0];
+                    force_ptr[3 * gi + 1] +=
+                        sign * results[ri].forces[3 * k + 1];
+                    force_ptr[3 * gi + 2] +=
+                        sign * results[ri].forces[3 * k + 2];
                 }
             }
             chunk_start = fi + 1;
@@ -221,8 +239,7 @@ PYBIND11_MODULE(libeegmfcc_solver, m) {
         .def(py::init<const std::string &, const std::string &,
                       const std::string &, const std::string &, int>(),
              py::arg("pdb_file"), py::arg("model_path"),
-             py::arg("precision") = "fp32",
-             py::arg("device") = "cpu",
+             py::arg("precision") = "fp32", py::arg("device") = "cpu",
              py::arg("batch_size") = 64,
              "Initialise from a PDB file and MACE model.")
         .def("compute", &EEGMFCCSolver::compute, py::arg("atomic_numbers"),

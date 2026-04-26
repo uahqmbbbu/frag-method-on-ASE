@@ -106,8 +106,8 @@ void MaceSolver::begin_batch() {
 
 int MaceSolver::batch_count() const { return buf_->batch_size; }
 
-bool MaceSolver::push(const std::vector<int32_t> &atomic_numbers,
-                       const std::vector<double> &positions) {
+bool MaceSolver::push(std::vector<int32_t> &&atomic_numbers,
+                       std::vector<double> &&positions) {
     int64_t i = buf_->batch_size;
     int64_t n = static_cast<int64_t>(atomic_numbers.size());
     int64_t begin = buf_->ptr_cpu[i];
@@ -115,6 +115,12 @@ bool MaceSolver::push(const std::vector<int32_t> &atomic_numbers,
     // update ptr
     buf_->ptr_cpu[i + 1] = begin + n;
     buf_->total_atoms = buf_->ptr_cpu[i + 1];
+
+    if (buf_->total_atoms > buf_->max_atoms) {
+        throw std::runtime_error(
+            "MaceSolver::push: total_atoms " + std::to_string(buf_->total_atoms) +
+            " exceeds max_atoms " + std::to_string(buf_->max_atoms));
+    }
 
     // fill pinned memory directly
     int64_t *batch_ptr = buf_->pinned_batch.data_ptr<int64_t>();
@@ -184,6 +190,11 @@ std::vector<MaceOutput> MaceSolver::flush() {
 
         auto edges = mask.nonzero();
         int64_t E = edges.size(0);
+        if (E > buf_->max_edges) {
+            throw std::runtime_error(
+                "MaceSolver::flush: edge count " + std::to_string(E) +
+                " exceeds max_edges " + std::to_string(buf_->max_edges));
+        }
         buf_->total_edges = E;
         buf_->edge_index.slice(1, 0, E)
             .copy_(edges.t().slice(1, 0, E));
