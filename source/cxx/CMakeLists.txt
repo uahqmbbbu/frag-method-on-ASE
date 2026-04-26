@@ -7,8 +7,8 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # ---- meika headers (user's header-only library) ----
-set(MEIKA_DIR "" CACHE PATH "Path to meika headers (parent used as -I dir)")
-get_filename_component(MEIKA_PARENT "${MEIKA_DIR}" DIRECTORY)
+set(MEIKA_PREFIX "" CACHE PATH "Path to meika headers (parent used as -I dir)")
+get_filename_component(MEIKA_PARENT "${MEIKA_PREFIX}" DIRECTORY)
 
 # ---- pybind11 ----
 find_package(pybind11 REQUIRED)
