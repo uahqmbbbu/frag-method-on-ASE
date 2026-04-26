@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/../lib")
 
 # ---- meika headers (user's header-only library) ----
 set(MEIKA_PREFIX "" CACHE PATH "Path to meika headers (parent used as -I dir)")
@@ -26,4 +27,5 @@ set(OPENMM_INCLUDE_DIR "$ENV{CONDA_PREFIX}/include")
 # ---- sub-modules ----
 add_subdirectory(mace_solver)
 add_subdirectory(nonbonded_solver)
+add_subdirectory(openmm_solver)
 add_subdirectory(eegmfcc_solver)

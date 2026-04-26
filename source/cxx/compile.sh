@@ -38,10 +38,6 @@ cmake -B "${BUILD_DIR}" \
 echo "--- Building ---"
 cmake --build "${BUILD_DIR}"
 
-# copy .so to the parent (calculators/) directory
-echo "--- Installing ---"
-cp "${BUILD_DIR}"/eegmfcc_solver/libeegmfcc_solver*.so "${SCRIPT_DIR}/../calculators/"
-
 echo "--- Done ---"
 
 export LD_LIBRARY_PATH=$TORCH_PREFIX/lib:$LD_LIBRARY_PATH

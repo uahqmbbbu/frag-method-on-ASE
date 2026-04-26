@@ -16,14 +16,12 @@
 
 namespace py = pybind11;
 
-// Ghost hydrogen cap
 struct GhostH {
     int root;              // global atom index the H attaches to
     std::vector<int> cons; // atoms defining the direction
     double bond_length;
 };
 
-// Pre-stored fragment specification
 struct FragInfo {
     std::vector<int> atoms;     // global atom indices of real atoms
     std::vector<GhostH> ghosts; // ghost H caps
@@ -34,7 +32,7 @@ class EEGMFCCSolver {
   public:
     EEGMFCCSolver(const std::string &pdb_file, const std::string &model_path,
                   const std::string &precision = "fp32",
-                  const std::string &device = "cpu", int batch_size = 64,
+                  const std::string &device = "cpu", int batch_size = 128,
                   const std::string &system_xml = "");
 
     std::tuple<double, py::array_t<double>>
@@ -45,7 +43,7 @@ class EEGMFCCSolver {
 
   private:
     meika::system::System sys_;
-    int n_atoms_ = 0;
+    size_t N = 0;
     std::vector<int> atomic_numbers_;
     std::vector<FragInfo> fragments_;
     std::vector<std::pair<int, int>> exclude_pairs_;

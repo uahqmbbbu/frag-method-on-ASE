@@ -106,7 +106,7 @@ void NonBondedSolver::precalc_matrix() {
         }
     }
 
-    // 为1-2, 1-3, 1-4作用修改矩阵
+    // 1-2, 1-3, 1-4 modify
 #pragma omp parallel for
     for (size_t i = 0; i < specials_.size(); ++i) {
         const auto p1 = specials_[i].p1;
@@ -131,7 +131,7 @@ void NonBondedSolver::precalc_matrix() {
         lj2[idx1] = lj2[idx2] = 24.0 * epsilon * sigma6;
     }
 
-    // 为exclude_pair修改矩阵
+    // exclude_pair modify
 #pragma omp parallel for
     for (size_t i = 0; i < exclude_pairs_.size(); ++i) {
         const auto p1 = exclude_pairs_[i].first;

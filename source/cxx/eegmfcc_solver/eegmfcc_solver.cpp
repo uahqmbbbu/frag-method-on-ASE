@@ -17,7 +17,7 @@ EEGMFCCSolver::EEGMFCCSolver(const std::string &pdb_file,
                              const std::string &device, int batch_size,
                              const std::string &system_xml)
     : sys_(meika::pdb::readPDB(pdb_file)) {
-    n_atoms_ = sys_.n;
+    N = sys_.n;
     map_name_to_z();
     pre_frag();
 
@@ -31,8 +31,8 @@ EEGMFCCSolver::EEGMFCCSolver(const std::string &pdb_file,
 
 void EEGMFCCSolver::map_name_to_z() {
     const auto &elem_map = meika::system::get_name_to_atomic_number_map();
-    atomic_numbers_.resize(n_atoms_);
-    for (int i = 0; i < n_atoms_; ++i) {
+    atomic_numbers_.resize(N);
+    for (size_t i = 0; i < N; ++i) {
         auto it = elem_map.find(sys_.element[i]);
         atomic_numbers_[i] = (it != elem_map.end()) ? it->second : 0;
     }
@@ -164,7 +164,6 @@ EEGMFCCSolver::compute_qm(py::array_t<double> positions_py) {
     for (size_t fi = 0; fi < fragments_.size(); ++fi) {
         const auto &frag = fragments_[fi];
 
-        // ---- gather z & coord for this fragment (real + ghost) ----
         std::vector<int32_t> z;
         std::vector<double> coord;
 
@@ -193,11 +192,10 @@ EEGMFCCSolver::compute_qm(py::array_t<double> positions_py) {
             coord.push_back(hz);
         }
 
-        // ---- push directly into solver's pinned memory ----
         bool full = mace_solver_->push(std::move(z), std::move(coord));
 
         if (full || fi == fragments_.size() - 1) {
-            auto results = mace_solver_->flush();
+            auto results = mace_solver_->forward();
 
             for (size_t ri = 0; ri < results.size(); ++ri) {
                 const auto &rfrag = fragments_[chunk_start + ri];
@@ -255,8 +253,12 @@ PYBIND11_MODULE(libeegmfcc_solver, m) {
              py::arg("precision") = "fp32", py::arg("device") = "cpu",
              py::arg("batch_size") = 64, py::arg("system_xml") = "",
              "Initialise from a PDB file and MACE model.")
-        .def("compute", &EEGMFCCSolver::compute_qm, py::arg("positions"),
+        .def("compute", &EEGMFCCSolver::compute_qm,
+             py::call_guard<py::gil_scoped_release>(),
+             py::arg("positions"),
              "Compute QM energy and forces.\n\n")
-        .def("compute_mm", &EEGMFCCSolver::compute_mm, py::arg("positions"),
+        .def("compute_mm", &EEGMFCCSolver::compute_mm,
+             py::call_guard<py::gil_scoped_release>(),
+             py::arg("positions"),
              "Compute MM nonbonded energy and forces.");
 }

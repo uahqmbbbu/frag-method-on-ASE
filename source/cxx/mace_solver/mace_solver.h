@@ -6,13 +6,11 @@
 #include <string>
 #include <vector>
 
-/// Output for a single structure in a batch.
 struct MaceOutput {
     double energy;
-    std::vector<double> forces; ///< flat n×3 (eV/Å)
+    std::vector<double> forces;
 };
 
-/// Pre-allocated computation buffer (pinned CPU + optional GPU).
 struct CalcBuffer {
     torch::Device device;
     torch::ScalarType dtype;
@@ -54,29 +52,18 @@ struct CalcBuffer {
                int64_t max_edges_per_struc = 8000);
 };
 
-/// Batched MACE TorchScript model evaluator.
 class MaceSolver {
   public:
     MaceSolver(const std::string &model_path,
                const std::string &precision = "fp32",
                const std::string &device_str = "cpu", int batch_size = 128);
 
-    /// Reset buffer counters for a new batch.
+    int batch_count() const;
     void begin_batch();
 
-    /// Push one structure's data into the pinned buffer.
-    /// Returns true if the buffer is now full.
-    /// \param atomic_numbers  Atomic numbers of each atom in this structure.
-    /// \param positions       Flat coordinates (n×3) in Ångströms.
     bool push(std::vector<int32_t> &&atomic_numbers,
               std::vector<double> &&positions);
-
-    /// Build device tensors, run forward, return results for the current batch.
-    /// Clears batch state so the next push starts fresh.
-    std::vector<MaceOutput> flush();
-
-    /// Number of structures currently accumulated in the buffer.
-    int batch_count() const;
+    std::vector<MaceOutput> forward();
 
   private:
     std::unique_ptr<torch::jit::Module> model_;

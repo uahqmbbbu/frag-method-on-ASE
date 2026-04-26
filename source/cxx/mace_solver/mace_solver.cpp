@@ -94,7 +94,6 @@ bool MaceSolver::push(std::vector<int32_t> &&atomic_numbers,
     int64_t n = static_cast<int64_t>(atomic_numbers.size());
     int64_t begin = buf_->ptr_cpu[i];
 
-    // update ptr
     buf_->ptr_cpu[i + 1] = begin + n;
     buf_->total_atoms = buf_->ptr_cpu[i + 1];
 
@@ -105,7 +104,6 @@ bool MaceSolver::push(std::vector<int32_t> &&atomic_numbers,
                                  std::to_string(buf_->max_atoms));
     }
 
-    // fill pinned memory directly
     int64_t *batch_ptr = buf_->pinned_batch.data_ptr<int64_t>();
     double *pos_ptr = buf_->pinned_positions.data_ptr<double>();
     int32_t *z_ptr = buf_->pinned_z.data_ptr<int32_t>();
@@ -119,7 +117,7 @@ bool MaceSolver::push(std::vector<int32_t> &&atomic_numbers,
     return buf_->batch_size >= buf_->max_batch_size;
 }
 
-std::vector<MaceOutput> MaceSolver::flush() {
+std::vector<MaceOutput> MaceSolver::forward() {
     int64_t bs = buf_->batch_size;
     int64_t N = buf_->total_atoms;
     bool is_cuda = buf_->device.is_cuda();

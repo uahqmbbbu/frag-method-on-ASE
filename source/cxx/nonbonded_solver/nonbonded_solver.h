@@ -7,16 +7,14 @@
 /// NoCutoff nonbonded solver — LJ + Coulomb for all non-excluded pairs.
 class NonBondedSolver {
   public:
-    /// Deserialise OpenMM system XML and extract force field parameters.
     explicit NonBondedSolver(
         const std::string &system_xml,
         const std::vector<std::pair<int, int>> &exclude_pair);
 
-    /// Compute energy (kJ/mol) and forces (kJ/mol/nm) for positions (nm).
+    size_t num_atoms() const { return N; }
+
     std::tuple<double, std::vector<double>>
     compute(const std::vector<double> &positions) const;
-
-    int num_atoms() const { return N; }
 
   private:
     std::size_t N = 0;
