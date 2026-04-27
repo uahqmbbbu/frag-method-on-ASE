@@ -4,7 +4,7 @@ import sys
 from ase.calculators.calculator import Calculator
 
 # ensure lib/ is on the search path for pybind11 modules
-_libdir = os.path.join(os.path.dirname(__file__), "..", "lib")
+_libdir = os.path.join(os.path.dirname(__file__), "..", "..", "lib")
 if _libdir not in sys.path:
     sys.path.insert(0, _libdir)
 
