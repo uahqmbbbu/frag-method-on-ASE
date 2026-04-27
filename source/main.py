@@ -7,6 +7,7 @@
 import argparse
 import os
 import sys
+import time
 
 # ensure source/ and source/lib/ are importable from any working directory
 _this_dir = os.path.dirname(os.path.abspath(__file__))
@@ -110,6 +111,8 @@ def build_parser() -> argparse.ArgumentParser:
                            help="Trajectory output file.")
     out_group.add_argument("--traj-interval", type=int, default=10,
                            help="Trajectory write interval (default: 10).")
+    out_group.add_argument("--log-file", type=str, default=None,
+                           help="CSV log file (default: stdout only).")
     out_group.add_argument("--log-interval", type=int, default=1,
                            help="Logging interval (default: 1).")
 
@@ -171,20 +174,37 @@ def main():
     )
 
     # === Attach observers ===
+    log_file = None
+    if args.log_file:
+        log_file = open(args.log_file, "w")
+        log_file.write("step,time_s,epot_ev,ekin_ev,temp_k\n")
+
     if args.traj:
         from ase.io.trajectory import TrajectoryWriter
         traj = TrajectoryWriter(args.traj, mode="w")
         dyn.attach(traj.write, interval=args.traj_interval, atoms=atoms)
 
+    t0 = time.time()
+    header = f"{'Step':>8s} {'Time/s':>10s} {'Epot/eV':>14s} {'Ekin/eV':>14s} {'T/K':>10s}"
+    print(header)
+
     def log():
         epot = atoms.get_potential_energy()
-        print(f"Step {dyn.nsteps:6d}  Epot = {epot:12.4f} eV")
+        ekin = atoms.get_kinetic_energy()
+        temp = atoms.get_temperature()
+        t = time.time() - t0
+        line = f"{dyn.nsteps:8d} {t:10.2f} {epot:14.4f} {ekin:14.4f} {temp:10.1f}"
+        print(line)
+        if log_file:
+            log_file.write(f"{dyn.nsteps},{t:.3f},{epot:.4f},{ekin:.4f},{temp:.1f}\n")
 
     dyn.attach(log, interval=args.log_interval)
 
     # === Run ===
     print(f"Running {args.nsteps} steps of Langevin dynamics...")
     dyn.run(args.nsteps)
+    if log_file:
+        log_file.close()
     print("Done.")
 
 

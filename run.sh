@@ -12,4 +12,6 @@ python source/main.py \
     --force-fields "$FF_DIR/amber14-all.xml" "$FF_DIR/amber14/tip3p.xml" \
     --mm-dir test/mm_params \
     --nsteps 1 \
-    --log-interval 1
+    --log-interval 1\
+    --log-file log \
+	--traj traj
