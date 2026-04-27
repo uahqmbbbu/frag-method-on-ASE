@@ -27,5 +27,4 @@ set(OPENMM_INCLUDE_DIR "$ENV{CONDA_PREFIX}/include")
 # ---- sub-modules ----
 add_subdirectory(mace_solver)
 add_subdirectory(nonbonded_solver)
-add_subdirectory(openmm_solver)
 add_subdirectory(eegmfcc_solver)
