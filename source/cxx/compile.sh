@@ -39,6 +39,3 @@ echo "--- Building ---"
 cmake --build "${BUILD_DIR}"
 
 echo "--- Done ---"
-
-export LD_LIBRARY_PATH=$TORCH_PREFIX/lib:$LD_LIBRARY_PATH
-export OPENMM_PLUGIN_DIR=$CONDA_PREFIX/lib/plugins
