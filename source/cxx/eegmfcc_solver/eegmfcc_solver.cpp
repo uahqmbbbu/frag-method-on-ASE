@@ -7,6 +7,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
 #include <map>
 #include <set>
 #include <vector>
@@ -204,6 +207,7 @@ EEGMFCCSolver::compute(py::array_t<double> positions_py) {
         for (size_t fi = 0; fi < fragments_.size(); ++fi) {
             const auto &frag = fragments_[fi];
             auto [z, coord] = pre_model_input(frag, pos);
+            dump_fragments(z, coord);
 
             bool full = mace_solver_->push(std::move(z), std::move(coord));
 
@@ -231,6 +235,36 @@ EEGMFCCSolver::compute(py::array_t<double> positions_py) {
     } // gil_scoped_release
 
     return {energy, forces_arr};
+}
+
+
+
+void EEGMFCCSolver::dump_fragments(const std::vector<int32_t> &z,
+                                    const std::vector<double> &coord) const {
+    static const char *elem[] = {"?","H","He","Li","Be","B","C","N","O","F","Ne",
+        "Na","Mg","Al","Si","P","S","Cl","Ar"};
+    static int counter = 0;
+    static const std::string dir = "/home/jiabao/tmp/fragments";
+    static bool inited = []() {
+        std::filesystem::create_directories(dir); return true; }();
+
+    std::ostringstream ss;
+    ss << dir << "/fragment_" << std::setfill('0') << std::setw(4) << counter++ << ".xyz";
+    std::ofstream f(ss.str());
+    if (!f) return;
+    size_t n = z.size();
+    f << n << "\n# fragment\n";
+    for (size_t i = 0; i < n; ++i) {
+        int zz = z[i];
+        const char *name = (zz >= 0 && zz < 19) ? elem[zz] : "X";
+        std::ostringstream line;
+        line << std::setw(2) << name;
+        line << std::fixed << std::setprecision(6);
+        line << std::setw(13) << coord[3*i+0];
+        line << std::setw(13) << coord[3*i+1];
+        line << std::setw(13) << coord[3*i+2] << "\n";
+        f << line.str();
+    }
 }
 
 PYBIND11_MODULE(libeegmfcc_solver, m) {

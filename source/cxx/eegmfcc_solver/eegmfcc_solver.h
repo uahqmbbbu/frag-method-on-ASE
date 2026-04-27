@@ -54,4 +54,7 @@ class EEGMFCCSolver {
     void build_exclude_pairs();
     std::tuple<std::vector<int32_t>, std::vector<double>>
     pre_model_input(const FragInfo &frag, const double *pos);
+
+    void dump_fragments(const std::vector<int32_t> &z,
+                        const std::vector<double> &coord) const;
 };
