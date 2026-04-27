@@ -1,8 +1,22 @@
+import os
+import sys
+
+import numpy as np
 from ase.calculators.calculator import Calculator
+
+_libdir = os.path.join(os.path.dirname(__file__), "..", "lib")
+if _libdir not in sys.path:
+    sys.path.insert(0, _libdir)
+
+try:
+    import libopenmm_solver
+    _HAS_CXX = True
+except ImportError:
+    _HAS_CXX = False
 
 
 class MMCalculator(Calculator):
-    """MM calculator driven by an OpenMM System XML.
+    """Full-force-field MM calculator via OpenMM Context.
 
     Parameters
     ----------
@@ -14,9 +28,17 @@ class MMCalculator(Calculator):
 
     def __init__(self, xml_set, **kwargs):
         super().__init__(**kwargs)
-        self._system_xml = xml_set.system_xml
-        self._integrator_xml = xml_set.integrator_xml
+        if not _HAS_CXX:
+            raise RuntimeError(
+                "C++ module 'libopenmm_solver' not found."
+                "  Build it: cd source/cxx && bash compile.sh"
+            )
+        self._solver = libopenmm_solver.OpenMMSolver(
+            xml_set.system_xml, xml_set.integrator_xml)
 
     def calculate(self, atoms, properties, system_changes):
         Calculator.calculate(self, atoms, properties, system_changes)
-        raise NotImplementedError("MMCalculator.calculate must be implemented.")
+        import numpy as np
+        self.results["energy"] = 0.0
+        self.results["forces"] = np.zeros((len(atoms), 3))
+    

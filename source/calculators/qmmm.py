@@ -46,6 +46,8 @@ class QMMM(SimpleQMMM):
     def calculate(self, atoms, properties, system_changes):
         Calculator.calculate(self, atoms, properties, system_changes)
 
+        if self.qmatoms is None:
+            self.qmatoms = atoms[self.selection]
         self.qmatoms.positions = atoms.positions[self.selection]
         if self.vacuum:
             self.qmatoms.positions += self.center - self.qmatoms.positions.mean(axis=0)

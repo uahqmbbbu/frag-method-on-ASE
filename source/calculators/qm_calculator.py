@@ -40,7 +40,6 @@ class QMCalculator(Calculator):
 
     def calculate(self, atoms, properties, system_changes):
         Calculator.calculate(self, atoms, properties, system_changes)
-        qm_energy, qm_forces = self._solver.compute_qm(atoms.positions)
-        mm_energy, mm_forces = self._solver.compute_mm(atoms.positions)
-        self.results["energy"] = qm_energy + mm_energy
-        self.results["forces"] = qm_forces + mm_forces
+        energy, forces = self._solver.compute(atoms.positions)
+        self.results["energy"] = energy
+        self.results["forces"] = forces

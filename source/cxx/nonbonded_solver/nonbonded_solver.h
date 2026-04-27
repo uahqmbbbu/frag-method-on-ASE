@@ -1,7 +1,6 @@
 #pragma once
 
 #include <string>
-#include <tuple>
 #include <vector>
 
 /// NoCutoff nonbonded solver — LJ + Coulomb for all non-excluded pairs.
@@ -13,8 +12,9 @@ class NonBondedSolver {
 
     size_t num_atoms() const { return N; }
 
-    std::tuple<double, std::vector<double>>
-    compute(const std::vector<double> &positions) const;
+    /// pos: flat n×3 input (Å).  force_out: flat n×3 output, *accumulated* (not
+    /// zeroed).
+    double compute(const double *pos, double *force_out) const;
 
   private:
     std::size_t N = 0;

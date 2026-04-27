@@ -5,11 +5,15 @@
 #include <tuple>
 #include <vector>
 
+#include <pybind11/numpy.h>
+
 namespace OpenMM {
 class Context;
 class System;
 class Integrator;
 } // namespace OpenMM
+
+namespace py = pybind11;
 
 /// Evaluate energy & forces via a full OpenMM Context.
 class OpenMMSolver {
@@ -19,8 +23,8 @@ class OpenMMSolver {
 
     size_t num_atoms() const { return N; }
 
-    std::tuple<double, std::vector<double>>
-    compute(const std::vector<double> &positions);
+    std::tuple<double, py::array_t<double>>
+    compute(py::array_t<double> positions_py);
 
   private:
     size_t N = 0;

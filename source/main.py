@@ -1,16 +1,26 @@
 #!/usr/bin/env python3
-"""QMMM MD entry point."""
+"""QMMM MD entry point.  Run from any directory::
+
+    python source/main.py -f full.pdb --qm-pdb qm.pdb --qm-model model.pt ...
+"""
 
 import argparse
 import os
+import sys
+
+# ensure source/ and source/lib/ are importable from any working directory
+_this_dir = os.path.dirname(os.path.abspath(__file__))
+if _this_dir not in sys.path:
+    sys.path.insert(0, _this_dir)
+_lib_dir = os.path.join(_this_dir, "lib")
+if _lib_dir not in sys.path:
+    sys.path.insert(0, _lib_dir)
 
 from ase import Atoms
 from ase.io import read
 from ase.md.langevin import Langevin
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 from ase.units import fs, kcal, mol
-
-from ase.io import read as ase_read
 
 from calculators import QMMM, MMCalculator, QMCalculator
 from calculators.prepare_mm import prepare
@@ -21,8 +31,8 @@ def auto_selection(full_pdb: str, qm_pdb: str) -> list[int]:
 
     Returns 0-based indices into the full system.
     """
-    full = ase_read(full_pdb)
-    qm = ase_read(qm_pdb)
+    full = read(full_pdb)
+    qm = read(qm_pdb)
 
     indices = []
     qm_i = 0

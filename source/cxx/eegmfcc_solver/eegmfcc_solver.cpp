@@ -18,8 +18,9 @@ EEGMFCCSolver::EEGMFCCSolver(const std::string &pdb_file,
                              const std::string &system_xml)
     : sys_(meika::pdb::readPDB(pdb_file)) {
     N = sys_.n;
-    map_name_to_z();
-    pre_frag();
+    build_atomic_numbers();
+    build_fragments();
+    build_exclude_pairs();
 
     mace_solver_ =
         std::make_unique<MaceSolver>(model_path, precision, device, batch_size);
@@ -29,7 +30,7 @@ EEGMFCCSolver::EEGMFCCSolver(const std::string &pdb_file,
     }
 }
 
-void EEGMFCCSolver::map_name_to_z() {
+void EEGMFCCSolver::build_atomic_numbers() {
     const auto &elem_map = meika::system::get_name_to_atomic_number_map();
     atomic_numbers_.resize(N);
     for (size_t i = 0; i < N; ++i) {
@@ -66,7 +67,7 @@ std::vector<std::pair<int, int>> EEGMFCCSolver::split_chain() const {
     return output;
 }
 
-void EEGMFCCSolver::pre_frag() {
+void EEGMFCCSolver::build_fragments() {
     auto frag_atom = frag2atom();
     auto regions = split_chain();
 
@@ -128,7 +129,9 @@ void EEGMFCCSolver::pre_frag() {
             fragments_.push_back(std::move(frag));
         }
     }
+}
 
+void EEGMFCCSolver::build_exclude_pairs() {
     std::map<std::pair<int, int>, int> exclude_count;
     for (const auto &frag : fragments_) {
         for (size_t a = 0; a < frag.atoms.size(); ++a) {
@@ -145,101 +148,89 @@ void EEGMFCCSolver::pre_frag() {
     }
 }
 
+std::tuple<std::vector<int32_t>, std::vector<double>>
+EEGMFCCSolver::pre_model_input(const FragInfo &frag, const double *pos) {
+    std::vector<int32_t> z;
+    std::vector<double> coord;
+
+    for (int gi : frag.atoms) {
+        z.push_back(atomic_numbers_[gi]);
+        coord.push_back(pos[3 * gi + 0]);
+        coord.push_back(pos[3 * gi + 1]);
+        coord.push_back(pos[3 * gi + 2]);
+    }
+
+    for (const auto &gh : frag.ghosts) {
+        double dx = 0, dy = 0, dz = 0;
+        for (int ci : gh.cons) {
+            dx += pos[3 * ci + 0] - pos[3 * gh.root + 0];
+            dy += pos[3 * ci + 1] - pos[3 * gh.root + 1];
+            dz += pos[3 * ci + 2] - pos[3 * gh.root + 2];
+        }
+        double dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+        double hx = pos[3 * gh.root + 0] + (dx / dist) * gh.bond_length;
+        double hy = pos[3 * gh.root + 1] + (dy / dist) * gh.bond_length;
+        double hz = pos[3 * gh.root + 2] + (dz / dist) * gh.bond_length;
+
+        z.push_back(1);
+        coord.push_back(hx);
+        coord.push_back(hy);
+        coord.push_back(hz);
+    }
+
+    return {z, coord};
+}
+
 std::tuple<double, py::array_t<double>>
-EEGMFCCSolver::compute_qm(py::array_t<double> positions_py) {
+EEGMFCCSolver::compute(py::array_t<double> positions_py) {
     auto buf_pos = positions_py.request();
     const double *pos = static_cast<const double *>(buf_pos.ptr);
     size_t n_atoms = buf_pos.shape[0];
 
-    py::array_t<double> qm_forces(
+    py::array_t<double> forces_arr(
         std::vector<py::ssize_t>{static_cast<py::ssize_t>(n_atoms), 3});
-    double *force_ptr = qm_forces.mutable_data();
+    double *force_ptr = forces_arr.mutable_data();
     std::memset(force_ptr, 0, n_atoms * 3 * sizeof(double));
 
-    double qm_energy = 0.0;
+    double energy = 0.0;
 
-    mace_solver_->begin_batch();
-    size_t chunk_start = 0; // fragment index where current batch starts
+    {
+        py::gil_scoped_release unlock;
 
-    for (size_t fi = 0; fi < fragments_.size(); ++fi) {
-        const auto &frag = fragments_[fi];
+        // ---- QM (MACE EEGMFCC) ----
+        mace_solver_->begin_batch();
+        size_t chunk_start = 0;
 
-        std::vector<int32_t> z;
-        std::vector<double> coord;
+        for (size_t fi = 0; fi < fragments_.size(); ++fi) {
+            const auto &frag = fragments_[fi];
+            auto [z, coord] = pre_model_input(frag, pos);
 
-        for (int gi : frag.atoms) {
-            z.push_back(atomic_numbers_[gi]);
-            coord.push_back(pos[3 * gi + 0]);
-            coord.push_back(pos[3 * gi + 1]);
-            coord.push_back(pos[3 * gi + 2]);
-        }
+            bool full = mace_solver_->push(std::move(z), std::move(coord));
 
-        for (const auto &gh : frag.ghosts) {
-            double dx = 0, dy = 0, dz = 0;
-            for (int ci : gh.cons) {
-                dx += pos[3 * ci + 0] - pos[3 * gh.root + 0];
-                dy += pos[3 * ci + 1] - pos[3 * gh.root + 1];
-                dz += pos[3 * ci + 2] - pos[3 * gh.root + 2];
-            }
-            double dist = std::sqrt(dx * dx + dy * dy + dz * dz);
-            double hx = pos[3 * gh.root + 0] + (dx / dist) * gh.bond_length;
-            double hy = pos[3 * gh.root + 1] + (dy / dist) * gh.bond_length;
-            double hz = pos[3 * gh.root + 2] + (dz / dist) * gh.bond_length;
+            if (full || fi == fragments_.size() - 1) {
+                auto results = mace_solver_->forward();
 
-            z.push_back(1); // H
-            coord.push_back(hx);
-            coord.push_back(hy);
-            coord.push_back(hz);
-        }
+                for (size_t ri = 0; ri < results.size(); ++ri) {
+                    const auto &rfrag = fragments_[chunk_start + ri];
+                    int sign = rfrag.sign;
+                    energy += sign * results[ri].energy;
 
-        bool full = mace_solver_->push(std::move(z), std::move(coord));
-
-        if (full || fi == fragments_.size() - 1) {
-            auto results = mace_solver_->forward();
-
-            for (size_t ri = 0; ri < results.size(); ++ri) {
-                const auto &rfrag = fragments_[chunk_start + ri];
-                int sign = rfrag.sign;
-                qm_energy += sign * results[ri].energy;
-
-                for (size_t k = 0; k < rfrag.atoms.size(); ++k) {
-                    int gi = rfrag.atoms[k];
-                    force_ptr[3 * gi + 0] +=
-                        sign * results[ri].forces[3 * k + 0];
-                    force_ptr[3 * gi + 1] +=
-                        sign * results[ri].forces[3 * k + 1];
-                    force_ptr[3 * gi + 2] +=
-                        sign * results[ri].forces[3 * k + 2];
+                    for (size_t k = 0; k < rfrag.atoms.size() * 3; ++k) {
+                        int gi = rfrag.atoms[k / 3];
+                        force_ptr[3 * gi + k % 3] +=
+                            sign * results[ri].forces[k];
+                    }
                 }
+                chunk_start = fi + 1;
             }
-            chunk_start = fi + 1;
         }
-    }
 
-    return {qm_energy, qm_forces};
-}
+        // ---- MM nonbonded ----
+        if (nb_solver_)
+            energy += nb_solver_->compute(pos, force_ptr);
+    } // gil_scoped_release
 
-std::tuple<double, py::array_t<double>>
-EEGMFCCSolver::compute_mm(py::array_t<double> positions_py) {
-    if (!nb_solver_) {
-        throw std::runtime_error(
-            "EEGMFCCSolver: system_xml not provided, MM unavailable.");
-    }
-    auto buf = positions_py.request();
-    const double *pos = static_cast<const double *>(buf.ptr);
-    size_t n = buf.shape[0];
-
-    std::vector<double> pos_vec(n * 3);
-    std::memcpy(pos_vec.data(), pos, pos_vec.size() * sizeof(double));
-
-    auto [mm_energy, forces] = nb_solver_->compute(pos_vec);
-
-    py::array_t<double> mm_forces(
-        std::vector<py::ssize_t>{static_cast<py::ssize_t>(n), 3});
-    std::memcpy(mm_forces.mutable_data(), forces.data(),
-                forces.size() * sizeof(double));
-
-    return {mm_energy, mm_forces};
+    return {energy, forces_arr};
 }
 
 PYBIND11_MODULE(libeegmfcc_solver, m) {
@@ -253,12 +244,6 @@ PYBIND11_MODULE(libeegmfcc_solver, m) {
              py::arg("precision") = "fp32", py::arg("device") = "cpu",
              py::arg("batch_size") = 64, py::arg("system_xml") = "",
              "Initialise from a PDB file and MACE model.")
-        .def("compute", &EEGMFCCSolver::compute_qm,
-             py::call_guard<py::gil_scoped_release>(),
-             py::arg("positions"),
-             "Compute QM energy and forces.\n\n")
-        .def("compute_mm", &EEGMFCCSolver::compute_mm,
-             py::call_guard<py::gil_scoped_release>(),
-             py::arg("positions"),
-             "Compute MM nonbonded energy and forces.");
+        .def("compute", &EEGMFCCSolver::compute, py::arg("positions"),
+             "Compute QM (MACE) + MM (nonbonded) energy and forces.");
 }

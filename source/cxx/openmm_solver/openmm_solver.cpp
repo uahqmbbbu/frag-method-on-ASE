@@ -16,6 +16,7 @@
 
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 
 namespace py = pybind11;
 
@@ -42,40 +43,54 @@ OpenMMSolver::OpenMMSolver(const std::string &system_xml,
         std::make_unique<OpenMM::Context>(*system_, *integrator_, platform);
 }
 
-std::tuple<double, std::vector<double>>
-OpenMMSolver::compute(const std::vector<double> &positions) {
+std::tuple<double, py::array_t<double>>
+OpenMMSolver::compute(py::array_t<double> positions_py) {
+    auto buf = positions_py.request();
+    const double *pos = static_cast<const double *>(buf.ptr);
+    size_t n = buf.shape[0];
 
-    // copy & convert Å → nm (OpenMM internal unit)
-    std::vector<OpenMM::Vec3> pos_nm(positions.size() / 3);
-#pragma omp parallel for
-    for (size_t i = 0; i < pos_nm.size(); ++i) {
-        pos_nm[i] = OpenMM::Vec3(
-            positions[3 * i + 0] / meika::unit::NANOMETER2ANGSTROM,
-            positions[3 * i + 1] / meika::unit::NANOMETER2ANGSTROM,
-            positions[3 * i + 2] / meika::unit::NANOMETER2ANGSTROM);
+    std::vector<double> flat(n * 3);
+    std::memcpy(flat.data(), pos, flat.size() * sizeof(double));
+
+    py::array_t<double> forces_arr(
+        std::vector<py::ssize_t>{static_cast<py::ssize_t>(n), 3});
+    double *fptr = forces_arr.mutable_data();
+    double energy;
+
+    {
+        py::gil_scoped_release unlock;
+
+        std::vector<OpenMM::Vec3> pos_nm(n);
+        for (size_t i = 0; i < n; ++i) {
+            pos_nm[i] = OpenMM::Vec3(
+                flat[3 * i + 0] / meika::unit::NANOMETER2ANGSTROM,
+                flat[3 * i + 1] / meika::unit::NANOMETER2ANGSTROM,
+                flat[3 * i + 2] / meika::unit::NANOMETER2ANGSTROM);
+        }
+
+        try {
+            context_->setPositions(pos_nm);
+            auto state = context_->getState(OpenMM::State::Forces |
+                                            OpenMM::State::Energy);
+
+            energy = state.getPotentialEnergy() / meika::unit::EV2KJ;
+
+            const double ffactor =
+                1.0 / (meika::unit::NANOMETER2ANGSTROM * meika::unit::EV2KJ);
+
+            const auto &f_vec = state.getForces();
+            for (size_t i = 0; i < n; ++i) {
+                fptr[3 * i + 0] = f_vec[i][0] * ffactor;
+                fptr[3 * i + 1] = f_vec[i][1] * ffactor;
+                fptr[3 * i + 2] = f_vec[i][2] * ffactor;
+            }
+        } catch (...) {
+            // ensure exception propagates through GIL re-acquire
+            throw;
+        }
     }
 
-    context_->setPositions(pos_nm);
-    auto state =
-        context_->getState(OpenMM::State::Forces | OpenMM::State::Energy);
-
-    const double energy =
-        state.getPotentialEnergy() / meika::unit::EV2KJ; // → eV
-
-    // forces: kJ/mol/nm  →  eV/Å
-    const double ffactor =
-        1.0 / (meika::unit::NANOMETER2ANGSTROM * meika::unit::EV2KJ);
-
-    const auto &f_vec = state.getForces();
-    std::vector<double> forces(positions.size());
-#pragma omp parallel for
-    for (size_t i = 0; i < pos_nm.size(); ++i) {
-        forces[3 * i + 0] = f_vec[i][0] * ffactor;
-        forces[3 * i + 1] = f_vec[i][1] * ffactor;
-        forces[3 * i + 2] = f_vec[i][2] * ffactor;
-    }
-
-    return {energy, forces};
+    return {energy, forces_arr};
 }
 
 PYBIND11_MODULE(libopenmm_solver, m) {

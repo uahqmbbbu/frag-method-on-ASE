@@ -15,15 +15,15 @@ CalcBuffer::CalcBuffer(torch::Device dev, torch::ScalarType tp,
     auto pinned_f64 = torch::TensorOptions()
                           .device(torch::kCPU)
                           .dtype(torch::kFloat64)
-                          .pinned_memory(true);
+                          .pinned_memory(device.is_cuda());
     auto pinned_i64 = torch::TensorOptions()
                           .device(torch::kCPU)
                           .dtype(torch::kInt64)
-                          .pinned_memory(true);
+                          .pinned_memory(device.is_cuda());
     auto pinned_i32 = torch::TensorOptions()
                           .device(torch::kCPU)
                           .dtype(torch::kInt32)
-                          .pinned_memory(true);
+                          .pinned_memory(device.is_cuda());
 
     auto dev_tp = torch::TensorOptions().device(device).dtype(dtype);
     auto dev_i64 = torch::TensorOptions().device(device).dtype(torch::kInt64);

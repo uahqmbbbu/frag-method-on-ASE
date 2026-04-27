@@ -12,7 +12,7 @@ fi
 export CONDA_PREFIX
 
 PYBIND11_PREFIX="${CONDA_PREFIX}/lib/python3.10/site-packages/pybind11"
-export TORCH_PREFIX=/home/public/soft/libtorch-cxx11-2.4.1-cu121/
+export TORCH_PREFIX=/home/public/soft/libtorch-cxx11-2.4.1-cpu/
 
 export CC=gcc
 export CXX=g++
@@ -41,3 +41,4 @@ cmake --build "${BUILD_DIR}"
 echo "--- Done ---"
 
 export LD_LIBRARY_PATH=$TORCH_PREFIX/lib:$LD_LIBRARY_PATH
+export OPENMM_PLUGIN_DIR=$CONDA_PREFIX/lib/plugins
