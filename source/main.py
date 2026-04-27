@@ -113,8 +113,8 @@ def build_parser() -> argparse.ArgumentParser:
                            help="Trajectory write interval (default: 10).")
     out_group.add_argument("--log-file", type=str, default=None,
                            help="CSV log file (default: stdout only).")
-    out_group.add_argument("--log-interval", type=int, default=1,
-                           help="Logging interval (default: 1).")
+    out_group.add_argument("--log-interval", type=int, default=10,
+                           help="Logging interval (default: 10).")
 
     return parser
 

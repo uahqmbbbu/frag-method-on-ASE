@@ -16,14 +16,11 @@ export TORCH_PREFIX=/home/public/soft/libtorch-cxx11-2.4.1-cpu/
 
 export CC=gcc
 export CXX=g++
-#export CC=$CONDA_PREFIX/bin/x86_64-conda-linux-gnu-gcc
-#export CXX=$CONDA_PREFIX/bin/x86_64-conda-linux-gnu-g++
 
 echo "MEIKA_PREFIX=${MEIKA_PREFIX}"
 echo "CONDA_PREFIX=${CONDA_PREFIX}"
 echo "PYBIND11_PREFIX=${PYBIND11_PREFIX}"
 echo "TORCH_PREFIX=${TORCH_PREFIX}"
-
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/build"
