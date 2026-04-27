@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# 进入项目根目录
-cd "$(dirname "$0")/.."
-
-FF_DIR='data/openmm-ff'
+FF_DIR='./openmm-ff'
 export TORCH_PREFIX=/home/public/soft/libtorch-cxx11-2.4.1-cpu/
 export LD_LIBRARY_PATH=$TORCH_PREFIX/lib:$LD_LIBRARY_PATH
 
