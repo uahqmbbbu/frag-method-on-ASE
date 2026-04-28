@@ -135,6 +135,7 @@ void EEGMFCCSolver::build_fragments() {
 }
 
 void EEGMFCCSolver::build_exclude_pairs() {
+    exclude_pairs_.clear();
     std::map<std::pair<int, int>, int> exclude_count;
     for (const auto &frag : fragments_) {
         for (size_t a = 0; a < frag.atoms.size(); ++a) {

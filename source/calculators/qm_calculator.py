@@ -33,7 +33,7 @@ class QMCalculator(Calculator):
         if not _HAS_CXX:
             raise RuntimeError(
                 "C++ module 'libeegmfcc_solver' not found."
-                "  Build it: cd source/cxx && bash compile.sh"
+                "  Build it: bash compile.sh"
             )
         self._solver = libeegmfcc_solver.EEGMFCCSolver(
             pdb_file, model_path, precision, device, batch_size, system_xml)
@@ -41,7 +41,5 @@ class QMCalculator(Calculator):
     def calculate(self, atoms, properties, system_changes):
         Calculator.calculate(self, atoms, properties, system_changes)
         energy, forces = self._solver.compute(atoms.positions)
-        from .force_debug import log_forces
-        log_forces("QMCalc", forces, atoms.numbers)
         self.results["energy"] = energy
         self.results["forces"] = forces

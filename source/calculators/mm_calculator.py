@@ -1,4 +1,3 @@
-import numpy as np
 from ase.calculators.calculator import Calculator
 from ase.units import kJ, mol, nm
 from openmm import Context, Platform, XmlSerializer, unit
@@ -41,6 +40,3 @@ class MMCalculator(Calculator):
         # kJ/mol → eV,   kJ/mol/nm → eV/Å
         self.results["energy"] = float(e_raw * (kJ / mol))
         self.results["forces"] = f_raw * (kJ / mol / nm)
-
-        from .force_debug import log_forces
-        log_forces("MMCalc", self.results["forces"], atoms.numbers)

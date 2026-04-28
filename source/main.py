@@ -104,6 +104,8 @@ def build_parser() -> argparse.ArgumentParser:
                           help="Langevin friction in 1/fs (default: 0.001).")
     md_group.add_argument("--nsteps", type=int, default=1000,
                           help="Number of MD steps (default: 1000).")
+    md_group.add_argument("--minimize-steps", type=int, default=50,
+                          help="Pre-MD minimization steps (0 to skip, default: 50).")
 
     # === Output ===
     out_group = parser.add_argument_group("Output")
@@ -165,6 +167,14 @@ def main():
     )
     atoms.calc = qmmm
 
+    # === Minimize ===
+    if args.minimize_steps > 0:
+        from ase.optimize import FIRE
+        print(f"Energy minimization ({args.minimize_steps} steps max, FIRE)...")
+        opt = FIRE(atoms)
+        opt.run(fmax=0.5, steps=args.minimize_steps)
+        print(f"  Min Epot = {atoms.get_potential_energy():.2f} eV")
+
     # === MD ===
     MaxwellBoltzmannDistribution(atoms, temperature_K=args.temperature)
 
@@ -187,7 +197,7 @@ def main():
         dyn.attach(traj.write, interval=args.traj_interval, atoms=atoms)
 
     t0 = time.time()
-    header = f"{'Step':>8s} {'Time/s':>10s} {'Epot/eV':>14s} {'Ekin/eV':>14s} {'T/K':>10s}"
+    header = f"{'Step':>8s} {'Time/s':>10s} {'T/K':>5s} {'Epot/eV':>14s} {'Ekin/eV':>14s}"
     print(header)
 
     def log():
@@ -195,10 +205,10 @@ def main():
         ekin = atoms.get_kinetic_energy()
         temp = atoms.get_temperature()
         t = time.time() - t0
-        line = f"{dyn.nsteps:8d} {t:10.2f} {epot:14.4f} {ekin:14.4f} {temp:10.1f}"
+        line = f"{dyn.nsteps:8d} {t:10.2f} {temp:5.1f} {epot:14.4f} {ekin:14.4f}"
         print(line)
         if log_file:
-            log_file.write(f"{dyn.nsteps},{t:.3f},{epot:.4f},{ekin:.4f},{temp:.1f}\n")
+            log_file.write(f"{dyn.nsteps:8d} {t:10.2f} {temp:5.1f} {epot:14.4f} {ekin:14.4f}\n")
 
     dyn.attach(log, interval=args.log_interval)
 

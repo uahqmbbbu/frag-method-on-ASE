@@ -64,5 +64,13 @@ class QMMM(SimpleQMMM):
 
         forces[self.selection] += qm_f - mm1_f
 
+        from .force_debug import log_forces, step_header, enabled
+        if enabled:
+            step_header()
+            log_forces("QM", qm_f)
+            log_forces("MM1(QM)", mm1_f)
+            log_forces("MM2(full)", mm2_f)
+            log_forces("combined", forces)
+
         self.results["energy"] = energy
         self.results["forces"] = forces
