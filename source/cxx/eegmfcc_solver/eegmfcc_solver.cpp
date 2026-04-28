@@ -139,8 +139,8 @@ void EEGMFCCSolver::build_exclude_pairs() {
     for (const auto &frag : fragments_) {
         for (size_t a = 0; a < frag.atoms.size(); ++a) {
             for (size_t b = a + 1; b < frag.atoms.size(); ++b) {
-                int i = frag.atoms[a];
-                int j = frag.atoms[b];
+                size_t i = frag.atoms[a];
+                size_t j = frag.atoms[b];
                 if (i > j) std::swap(i, j);
                 exclude_count[{i, j}] += frag.sign;
             }
@@ -190,9 +190,9 @@ EEGMFCCSolver::compute(py::array_t<double> positions_py) {
     const double *pos = static_cast<const double *>(buf_pos.ptr);
     size_t n_atoms = buf_pos.shape[0];
 
-    py::array_t<double> forces_arr(
+    py::array_t<double> forces(
         std::vector<py::ssize_t>{static_cast<py::ssize_t>(n_atoms), 3});
-    double *force_ptr = forces_arr.mutable_data();
+    double *force_ptr = forces.mutable_data();
     std::memset(force_ptr, 0, n_atoms * 3 * sizeof(double));
 
     double energy = 0.0;
@@ -216,13 +216,18 @@ EEGMFCCSolver::compute(py::array_t<double> positions_py) {
 
                 for (size_t ri = 0; ri < results.size(); ++ri) {
                     const auto &rfrag = fragments_[chunk_start + ri];
+                    const auto output = results[ri];
                     int sign = rfrag.sign;
                     energy += sign * results[ri].energy;
 
-                    for (size_t k = 0; k < rfrag.atoms.size() * 3; ++k) {
-                        int gi = rfrag.atoms[k / 3];
-                        force_ptr[3 * gi + k % 3] +=
-                            sign * results[ri].forces[k];
+                    for (size_t k = 0; k < rfrag.atoms.size(); ++k) {
+                        auto idx = rfrag.atoms[k];
+                        force_ptr[3 * idx + 0] +=
+                            sign * output.forces[3 * k + 0];
+                        force_ptr[3 * idx + 1] +=
+                            sign * output.forces[3 * k + 1];
+                        force_ptr[3 * idx + 2] +=
+                            sign * output.forces[3 * k + 2];
                     }
                 }
                 chunk_start = fi + 1;
@@ -233,7 +238,7 @@ EEGMFCCSolver::compute(py::array_t<double> positions_py) {
         if (nb_solver_) energy += nb_solver_->compute(pos, force_ptr);
     } // gil_scoped_release
 
-    return {energy, forces_arr};
+    return {energy, forces};
 }
 
 void EEGMFCCSolver::dump_fragments(const std::vector<int32_t> &z,

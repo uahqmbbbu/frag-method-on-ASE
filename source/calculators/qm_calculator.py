@@ -41,5 +41,7 @@ class QMCalculator(Calculator):
     def calculate(self, atoms, properties, system_changes):
         Calculator.calculate(self, atoms, properties, system_changes)
         energy, forces = self._solver.compute(atoms.positions)
+        from .force_debug import log_forces
+        log_forces("QMCalc", forces, atoms.numbers)
         self.results["energy"] = energy
         self.results["forces"] = forces

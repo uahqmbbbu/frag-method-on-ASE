@@ -148,8 +148,7 @@ void NonBondedSolver::precalc_matrix() {
     }
 }
 
-double NonBondedSolver::compute(const double *positions,
-                                double *forces) const {
+double NonBondedSolver::compute(const double *positions, double *forces) const {
     double energy = 0.0;
 
 #pragma omp parallel for reduction(+ : energy) schedule(static)

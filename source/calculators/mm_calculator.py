@@ -1,5 +1,6 @@
 import numpy as np
 from ase.calculators.calculator import Calculator
+from ase.units import kJ, mol, nm
 from openmm import Context, Platform, XmlSerializer, unit
 
 
@@ -29,8 +30,7 @@ class MMCalculator(Calculator):
         Calculator.calculate(self, atoms, properties, system_changes)
 
         # Å → nm
-        pos_nm = atoms.positions / 10.0
-        self._context.setPositions(pos_nm)
+        self._context.setPositions(atoms.positions / 10.0)
         state = self._context.getState(getEnergy=True, getForces=True)
 
         e_raw = state.getPotentialEnergy().value_in_unit(
@@ -38,7 +38,9 @@ class MMCalculator(Calculator):
         f_raw = state.getForces(asNumpy=True).value_in_unit(
             unit.kilojoule_per_mole / unit.nanometer)
 
-        # kJ/mol → eV, kJ/mol/nm → eV/Å
-        ev_per_kjmol = 1.0 / 96.485
-        self.results["energy"] = float(e_raw * ev_per_kjmol)
-        self.results["forces"] = f_raw * ev_per_kjmol * 0.1
+        # kJ/mol → eV,   kJ/mol/nm → eV/Å
+        self.results["energy"] = float(e_raw * (kJ / mol))
+        self.results["forces"] = f_raw * (kJ / mol / nm)
+
+        from .force_debug import log_forces
+        log_forces("MMCalc", self.results["forces"], atoms.numbers)

@@ -18,7 +18,7 @@ def prepare(pdb_path: str,
             output_dir: str = ".",
             temperature: float = 300.0,
             friction: float = 1.0,
-            timestep: float = 1.0,
+            timestep: float = 0.001,  # ps  (OpenMM unit; 0.001 ps = 1 fs)
             pbc: bool = True,
             cutoff: float = 0.9,
             shake_h: bool = True) -> MMXMLSet:

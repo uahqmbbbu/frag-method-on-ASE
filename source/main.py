@@ -100,8 +100,8 @@ def build_parser() -> argparse.ArgumentParser:
                           help="Integration timestep in fs (default: 1.0).")
     md_group.add_argument("--temperature", type=float, default=300,
                           help="Target temperature in K (default: 300).")
-    md_group.add_argument("--friction", type=float, default=0.01,
-                          help="Langevin friction in 1/fs (default: 0.01).")
+    md_group.add_argument("--friction", type=float, default=0.001,
+                          help="Langevin friction in 1/fs (default: 0.001).")
     md_group.add_argument("--nsteps", type=int, default=1000,
                           help="Number of MD steps (default: 1000).")
 
@@ -115,6 +115,8 @@ def build_parser() -> argparse.ArgumentParser:
                            help="CSV log file (default: stdout only).")
     out_group.add_argument("--log-interval", type=int, default=10,
                            help="Logging interval (default: 10).")
+    out_group.add_argument("--debug-forces", action="store_true", default=False,
+                           help="Log per-calculator force statistics.")
 
     return parser
 
@@ -164,7 +166,7 @@ def main():
     atoms.calc = qmmm
 
     # === MD ===
-    MaxwellBoltzmannDistribution(atoms, temperature_K=args.temperature * kcal / mol)
+    MaxwellBoltzmannDistribution(atoms, temperature_K=args.temperature)
 
     dyn = Langevin(
         atoms,
@@ -199,6 +201,12 @@ def main():
             log_file.write(f"{dyn.nsteps},{t:.3f},{epot:.4f},{ekin:.4f},{temp:.1f}\n")
 
     dyn.attach(log, interval=args.log_interval)
+
+    if args.debug_forces:
+        import logging
+        from calculators import force_debug as fd
+        logging.basicConfig(level=logging.INFO, format="%(message)s")
+        fd.enabled = True
 
     # === Run ===
     print(f"Running {args.nsteps} steps of Langevin dynamics...")

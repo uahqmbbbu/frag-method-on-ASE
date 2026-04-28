@@ -57,7 +57,7 @@ class QMMM(SimpleQMMM):
         mm2_e, mm2_f = self.get_mmcalc2_results(properties, system_changes)
 
         energy = mm2_e + qm_e - mm1_e
-        forces = mm2_f
+        forces = mm2_f.copy()
 
         if self.vacuum:
             qm_f -= qm_f.mean(axis=0)
