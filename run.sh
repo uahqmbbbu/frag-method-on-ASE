@@ -11,9 +11,9 @@ python source/main.py \
     --qm-pdb data/1osu-qm.pdb \
     --qm-model data/24m07_stagetwo_compiled.model \
     --qm-precision fp64 \
-    --force-fields "$FF_DIR/amber14-all.xml" "$FF_DIR/amber14/tip3p.xml" \
+    --force-fields "$FF_DIR/amber19/DNA.OL21.xml" "$FF_DIR/amber14/RNA.OL3.xml" "$FF_DIR/opc3.xml" "$FF_DIR/ionslm_hfe_opc3.xml" \
     --mm-dir test/mm_params \
-    --mm-no-shake \
+    --mm-pbc \
     --timestep 0.5 \
     --temperature 300 \
     --friction 0.1 \
