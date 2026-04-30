@@ -91,8 +91,6 @@ def build_parser() -> argparse.ArgumentParser:
                           help="Use PME (default: NoCutoff).")
     mm_group.add_argument("--mm-cutoff", type=float, default=1.0,
                           help="Nonbonded cutoff in nm (default: 1.0).")
-    mm_group.add_argument("--mm-no-shake", action="store_true", default=False,
-                          help="H-bond constraints.")
 
     # === MD ===
     md_group = parser.add_argument_group("MD")
@@ -140,12 +138,10 @@ def main():
     # prepare MM XML files — one call per calculator
     mm_xml_qm = prepare(args.qm_pdb, args.force_fields,
                         output_dir=os.path.join(args.mm_dir, "qm"),
-                        pbc=False, cutoff=args.mm_cutoff,
-                        shake_h=not args.mm_no_shake)
+                        pbc=False, cutoff=args.mm_cutoff)
     mm_xml_full = prepare(args.file, args.force_fields,
                           output_dir=os.path.join(args.mm_dir, "full"),
-                          pbc=args.mm_pbc, cutoff=args.mm_cutoff,
-                          shake_h=not args.mm_no_shake)
+                          pbc=args.mm_pbc, cutoff=args.mm_cutoff)
 
     # === Calculators ===
     qmcalc = QMCalculator(pdb_file=args.qm_pdb,
