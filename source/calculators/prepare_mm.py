@@ -3,7 +3,7 @@
 import os
 from dataclasses import dataclass
 
-from openmm import LangevinIntegrator, XmlSerializer
+from openmm import LangevinIntegrator, XmlSerializer, unit as u
 from openmm.app import ForceField, PDBFile, PDBxFile, PME, NoCutoff
 
 
@@ -20,7 +20,8 @@ def prepare(pdb_path: str,
             friction: float = 1.0,
             timestep: float = 0.001,  # ps (OpenMM unit; 0.001 ps = 1 fs)
             pbc: bool = True,
-            cutoff: float = 1.0) -> MMXMLSet:
+            cutoff: float = 1.0,
+            hmr_mass: float | None = None) -> MMXMLSet:
     """Generate System XML and Integrator XML from a PDB and force fields.
 
     Call once for each MM calculator.
@@ -39,11 +40,16 @@ def prepare(pdb_path: str,
     # system: no constraints, flexible water — forces are complete
     ff = ForceField(*force_fields)
     method = PME if pbc else NoCutoff
+    kwargs = {}
+    if hmr_mass is not None:
+        kwargs["hydrogenMass"] = hmr_mass * u.amu
+
     system = ff.createSystem(pdb.topology,
                              nonbondedMethod=method,
                              nonbondedCutoff=cutoff,
                              constraints=None,
-                             rigidWater=False)
+                             rigidWater=False,
+                             **kwargs)
     system_xml = os.path.join(output_dir, "system.xml")
     with open(system_xml, "w") as f:
         f.write(XmlSerializer.serialize(system))

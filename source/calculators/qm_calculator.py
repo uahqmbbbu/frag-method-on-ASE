@@ -4,15 +4,16 @@ import sys
 from ase.calculators.calculator import Calculator
 
 # ensure lib/ is on the search path for pybind11 modules
-_libdir = os.path.join(os.path.dirname(__file__), "..", "..", "lib")
+_libdir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "lib")
 if _libdir not in sys.path:
     sys.path.insert(0, _libdir)
 
 try:
     import libeegmfcc_solver
     _HAS_CXX = True
-except ImportError:
+except ImportError as e:
     _HAS_CXX = False
+    _import_error = f"{e}  (libdir={_libdir})"
 
 
 class QMCalculator(Calculator):
@@ -32,8 +33,7 @@ class QMCalculator(Calculator):
         super().__init__(**kwargs)
         if not _HAS_CXX:
             raise RuntimeError(
-                "C++ module 'libeegmfcc_solver' not found."
-                "  Build it: bash compile.sh"
+                f"C++ module 'libeegmfcc_solver' not found: {_import_error}"
             )
         self._solver = libeegmfcc_solver.EEGMFCCSolver(
             pdb_file, model_path, precision, device, batch_size, system_xml)
