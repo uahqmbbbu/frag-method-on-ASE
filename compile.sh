@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MEIKA_PREFIX="${HOME}/source/meika"
-
 CONDA_ENV="frag-ase"
 CONDA_PREFIX="${CONDA_PREFIX:-$(conda info --envs 2>/dev/null | awk -v env="$CONDA_ENV" '$1==env {print $NF; exit}')}"
 if [[ -z "$CONDA_PREFIX" ]]; then
@@ -11,7 +9,8 @@ if [[ -z "$CONDA_PREFIX" ]]; then
 fi
 export CONDA_PREFIX
 
-PYBIND11_PREFIX="${CONDA_PREFIX}/lib/python3.10/site-packages/pybind11"
+export MEIKA_PREFIX="${HOME}/source/meika"
+export PYBIND11_PREFIX="${CONDA_PREFIX}/lib/python3.10/site-packages/pybind11"
 export TORCH_PREFIX=/home/public/soft/libtorch-cxx11-2.4.1-cpu/
 
 export CC=gcc
