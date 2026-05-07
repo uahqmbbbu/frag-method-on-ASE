@@ -15,6 +15,8 @@ except ImportError as e:
     _HAS_CXX = False
     _import_error = f"{e}  (libdir={_libdir})"
 
+from .extract_nb import extract_nb_params
+
 
 class QMCalculator(Calculator):
     """QM calculator wrapping a C++ pybind11 module (``libeegmfcc_solver.EEGMFCCSolver``).
@@ -35,8 +37,13 @@ class QMCalculator(Calculator):
             raise RuntimeError(
                 f"C++ module 'libeegmfcc_solver' not found: {_import_error}"
             )
+        nb = extract_nb_params(system_xml) if system_xml else {}
         self._solver = libeegmfcc_solver.EEGMFCCSolver(
-            pdb_file, model_path, precision, device, batch_size, system_xml)
+            pdb_file, model_path, precision, device, batch_size,
+            nb.get("charges", []),
+            nb.get("sigma", []),
+            nb.get("epsilon", []),
+            nb.get("exceptions", []))
 
     def calculate(self, atoms, properties, system_changes):
         Calculator.calculate(self, atoms, properties, system_changes)

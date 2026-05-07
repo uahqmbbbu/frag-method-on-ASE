@@ -18,7 +18,11 @@ EEGMFCCSolver::EEGMFCCSolver(const std::string &pdb_file,
                              const std::string &model_path,
                              const std::string &precision,
                              const std::string &device, int batch_size,
-                             const std::string &system_xml)
+                             const std::vector<double> &nb_charges,
+                             const std::vector<double> &nb_sigma,
+                             const std::vector<double> &nb_epsilon,
+                             const std::vector<std::vector<double>>
+                                 &nb_exceptions)
     : sys_(meika::pdb::readPDB(pdb_file)) {
     N = sys_.n;
     build_atomic_numbers();
@@ -27,9 +31,9 @@ EEGMFCCSolver::EEGMFCCSolver(const std::string &pdb_file,
 
     mace_solver_ =
         std::make_unique<MaceSolver>(model_path, precision, device, batch_size);
-    if (!system_xml.empty()) {
-        nb_solver_ =
-            std::make_unique<NonBondedSolver>(system_xml, exclude_pairs_);
+    if (!nb_charges.empty()) {
+        nb_solver_ = std::make_unique<NonBondedSolver>(
+            nb_charges, nb_sigma, nb_epsilon, nb_exceptions, exclude_pairs_);
     }
 }
 
@@ -280,10 +284,17 @@ PYBIND11_MODULE(libeegmfcc_solver, m) {
     py::class_<EEGMFCCSolver>(m, "EEGMFCCSolver")
         .def(py::init<const std::string &, const std::string &,
                       const std::string &, const std::string &, int,
-                      const std::string &>(),
+                      const std::vector<double> &,
+                      const std::vector<double> &,
+                      const std::vector<double> &,
+                      const std::vector<std::vector<double>> &>(),
              py::arg("pdb_file"), py::arg("model_path"),
              py::arg("precision") = "fp32", py::arg("device") = "cpu",
-             py::arg("batch_size") = 64, py::arg("system_xml") = "",
+             py::arg("batch_size") = 64,
+             py::arg("nb_charges") = std::vector<double>{},
+             py::arg("nb_sigma") = std::vector<double>{},
+             py::arg("nb_epsilon") = std::vector<double>{},
+             py::arg("nb_exceptions") = std::vector<std::vector<double>>{},
              "Initialise from a PDB file and MACE model.")
         .def("compute", &EEGMFCCSolver::compute, py::arg("positions"),
              "Compute QM (MACE) + MM (nonbonded) energy and forces.");

@@ -2,67 +2,40 @@
 
 #include "nonbonded_solver.h"
 
-#include <openmm/NonbondedForce.h>
-#include <openmm/serialization/XmlSerializer.h>
-
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <fstream>
-#include <stdexcept>
-#include <string>
 
 NonBondedSolver::NonBondedSolver(
-    const std::string &system_xml,
-    const std::vector<std::pair<int, int>> &exclude_pair)
-    : exclude_pairs_(exclude_pair) {
-    get_nonbonded_params(system_xml);
-    precalc_matrix();
-}
+    const std::vector<double> &charges,
+    const std::vector<double> &sigma,   // nm
+    const std::vector<double> &epsilon, // kJ/mol
+    const std::vector<std::vector<double>> &exceptions,
+    const std::vector<std::pair<int, int>> &exclude_pairs)
+    : exclude_pairs_(exclude_pairs) {
 
-void NonBondedSolver::get_nonbonded_params(const std::string &system_xml) {
-    std::ifstream xml_file(system_xml);
-    if (!xml_file.is_open()) {
-        throw std::runtime_error("Cannot open system XML: " + system_xml);
-    }
-    auto sys_ptr = OpenMM::XmlSerializer::deserialize<OpenMM::System>(xml_file);
-    auto &sys = *sys_ptr;
-
-    // ---- find NonbondedForce ----
-    const OpenMM::NonbondedForce *nb = nullptr;
-    for (int k = 0; k < sys.getNumForces(); ++k) {
-        auto &force = sys.getForce(k);
-        if (force.getName() == "NonbondedForce") {
-            nb = dynamic_cast<const OpenMM::NonbondedForce *>(&force);
-            break;
-        }
-    }
-    if (!nb)
-        throw std::runtime_error("NonbondedForce not found in system XML.");
-
-    N = nb->getNumParticles();
-    charges_.resize(N);
+    N = charges.size();
+    charges_ = charges;
     sigma_.resize(N);
     epsilon_.resize(N);
+#pragma omp parallel for
     for (size_t i = 0; i < N; ++i) {
-        double charge, sigma, epsilon;
-        nb->getParticleParameters(i, charge, sigma, epsilon);
-        charges_[i] = charge;
-        sigma_[i] = sigma * meika::unit::NANOMETER2ANGSTROM;
-        epsilon_[i] = epsilon / meika::unit::EV2KJ;
+        sigma_[i] = sigma[i] * meika::unit::NANOMETER2ANGSTROM;
+        epsilon_[i] = epsilon[i] / meika::unit::EV2KJ;
     }
 
-    int nex = nb->getNumExceptions();
-    specials_.reserve(nex);
-    for (int k = 0; k < nex; ++k) {
-        int i, j;
-        double qq, sig, eps;
-        nb->getExceptionParameters(k, i, j, qq, sig, eps);
-        if (i > j) std::swap(i, j);
-
+    specials_.reserve(exceptions.size());
+    for (const auto &exc : exceptions) {
+        int i = static_cast<int>(exc[0]);
+        int j = static_cast<int>(exc[1]);
+        double qq = exc[2];
+        double sig = exc[3];
+        double eps = exc[4];
         specials_.push_back({i, j, qq, sig * meika::unit::NANOMETER2ANGSTROM,
                              eps / meika::unit::EV2KJ});
     }
+
+    precalc_matrix();
 }
 
 void NonBondedSolver::precalc_matrix() {

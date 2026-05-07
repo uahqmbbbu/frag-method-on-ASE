@@ -7,5 +7,5 @@ target_link_libraries(mace_solver PUBLIC
 
 target_compile_options(mace_solver PRIVATE
     $<$<CONFIG:Release>:-O2>
-    $<$<CONFIG:Debug>:-O0 -g>
+    $<$<CONFIG:Debug>:-O0 -gdwarf-4>
     -Wall -Wextra)

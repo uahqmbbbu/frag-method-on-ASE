@@ -3,17 +3,14 @@ pybind11_add_module(libeegmfcc_solver eegmfcc_solver.cpp)
 target_include_directories(libeegmfcc_solver PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/.."
-    "${MEIKA_PARENT}"
-    "${OPENMM_INCLUDE_DIR}")
+    "${MEIKA_PARENT}")
 
 target_link_libraries(libeegmfcc_solver PRIVATE
     mace_solver
     nonbonded_solver
-    ${TORCH_LIBRARIES}
-    "${OPENMM_LIBRARY}"
-    "${OPENMM_LIBS}")
+    ${TORCH_LIBRARIES})
 
 target_compile_options(libeegmfcc_solver PRIVATE
     $<$<CONFIG:Release>:-O2>
-    $<$<CONFIG:Debug>:-O0 -g>
+    $<$<CONFIG:Debug>:-O0 -gdwarf-4>
     -Wall -Wextra)

@@ -20,7 +20,11 @@ class EEGMFCCSolver {
     EEGMFCCSolver(const std::string &pdb_file, const std::string &model_path,
                   const std::string &precision = "fp32",
                   const std::string &device = "cpu", int batch_size = 128,
-                  const std::string &system_xml = "");
+                  const std::vector<double> &nb_charges = {},
+                  const std::vector<double> &nb_sigma = {},
+                  const std::vector<double> &nb_epsilon = {},
+                  const std::vector<std::vector<double>>
+                      &nb_exceptions = {});
 
     std::tuple<double, py::array_t<double>>
     compute(py::array_t<double> positions_py);
