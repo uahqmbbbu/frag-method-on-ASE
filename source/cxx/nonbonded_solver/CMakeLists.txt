@@ -9,5 +9,8 @@ target_link_libraries(nonbonded_solver PUBLIC
     "${OPENMM_LIBRARY}"
     "${OPENMM_LIBS}")
 
-target_compile_options(nonbonded_solver PRIVATE -O2 -Wall -Wextra -fopenmp)
+target_compile_options(nonbonded_solver PRIVATE
+    $<$<CONFIG:Release>:-O2>
+    $<$<CONFIG:Debug>:-O0 -g>
+    -Wall -Wextra -fopenmp)
 target_link_options(nonbonded_solver PRIVATE -fopenmp)

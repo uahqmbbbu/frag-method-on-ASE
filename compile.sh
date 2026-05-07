@@ -27,8 +27,11 @@ BUILD_DIR="${SCRIPT_DIR}/build"
 
 cd "${SCRIPT_DIR}"
 
-echo "--- Configuring ---"
+echo "--- Configuring (Debug + ASan) ---"
 cmake -B "${BUILD_DIR}" \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer" \
+    -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address" \
     -DCMAKE_PREFIX_PATH="${TORCH_PREFIX};${CONDA_PREFIX};${PYBIND11_PREFIX}" \
     -DMEIKA_PREFIX="${MEIKA_PREFIX}"
 

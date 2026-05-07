@@ -13,4 +13,7 @@ target_link_libraries(libeegmfcc_solver PRIVATE
     "${OPENMM_LIBRARY}"
     "${OPENMM_LIBS}")
 
-target_compile_options(libeegmfcc_solver PRIVATE -O2 -Wall -Wextra)
+target_compile_options(libeegmfcc_solver PRIVATE
+    $<$<CONFIG:Release>:-O2>
+    $<$<CONFIG:Debug>:-O0 -g>
+    -Wall -Wextra)
