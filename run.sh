@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export OMP_NUM_THREADS=12
+export MKL_NUM_THREADS=12
+export OPENBLAS_NUM_THREADS=12
+
+ulimit -s unlimited
 FF_DIR='./openmm-ff'
 export TORCH_PREFIX=/home/public/soft/libtorch-cxx11-2.4.1-cpu/
 export LD_LIBRARY_PATH=$TORCH_PREFIX/lib:$LD_LIBRARY_PATH
@@ -10,6 +15,9 @@ python source/main.py \
     --qm-pdb data/1osu-qm.pdb \
     --qm-model data/24m07_stagetwo_compiled.model \
     --qm-precision fp32 \
+    --qm-method xtb \
+    --xtb-method GFNFF \
+    --xtb-charge -5 \
     --mm-dir test/mm_params \
     --mm-pbc \
     --force-fields "$FF_DIR/amberfb15.xml" "$FF_DIR/tip3pfb.xml" \
@@ -17,7 +25,7 @@ python source/main.py \
     --timestep 1.0 \
     --temperature 300 \
     --friction 0.001 \
-    --nsteps 10000 \
+    --nsteps 200000 \
     --minimize-steps 0 \
     --log-file test/1osu.log \
     --log-interval 1\

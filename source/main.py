@@ -23,7 +23,7 @@ from ase.md.langevin import Langevin
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 from ase.units import fs, kcal, mol
 
-from calculators import QMMM, MMCalculator, QMCalculator
+from calculators import QMMM, MMCalculator, QMCalculator, XTBCalculator, TBLiteCalculator
 from calculators.prepare_mm import prepare
 
 
@@ -65,20 +65,29 @@ def build_parser() -> argparse.ArgumentParser:
                            help="File format (overrides auto-detection).")
 
     qm_group = parser.add_argument_group("QMCalc")
+    qm_group.add_argument("--qm-method", type=str, default="mace",
+                          choices=["mace", "xtb", "tblite"],
+                          help="QM method (default: mace).")
     qm_group.add_argument("--selection", type=int, nargs="+", default=None,
                           help="QM atom indices (0-based). If omitted, auto-detected from --qm-pdb.")
     qm_group.add_argument("--qm-pdb", type=str, required=True,
                           help="PDB file for QM calculator topology.")
-    qm_group.add_argument("--qm-model", type=str, required=True,
-                          help="TorchScript MACE model file (.pt).")
+    qm_group.add_argument("--qm-model", type=str, default=None,
+                          help="TorchScript MACE model file (.pt). Required for --qm-method mace.")
     qm_group.add_argument("--qm-precision", type=str, default="fp32",
                           choices=["fp32", "fp64"],
-                          help="QM calculation precision (default: fp32).")
+                          help="MACE calculation precision (default: fp32).")
     qm_group.add_argument("--qm-device", type=str, default="cpu",
                           choices=["cpu", "cuda"],
-                          help="QM device (default: cpu).")
+                          help="MACE device (default: cpu).")
     qm_group.add_argument("--qm-batch-size", type=int, default=64,
-                          help="QM fragment batch size (default: 64).")
+                          help="MACE fragment batch size (default: 64).")
+    qm_group.add_argument("--xtb-method", type=str, default="GFN2-xTB",
+                          help="xTB method (default: GFN2-xTB).")
+    qm_group.add_argument("--xtb-charge", type=int, default=0,
+                          help="xTB charge (default: 0).")
+    qm_group.add_argument("--xtb-uhf", type=int, default=0,
+                          help="xTB unpaired electrons (default: 0).")
     qm_group.add_argument("--vacuum", action="store_true", default=False,
                           help="Remove net translation of QM forces.")
 
@@ -148,12 +157,23 @@ def main():
                           hmr_mass=args.hmr_mass)
 
     # === Calculators ===
-    qmcalc = QMCalculator(pdb_file=args.qm_pdb,
-                          model_path=args.qm_model,
-                          precision=args.qm_precision,
-                          device=args.qm_device,
-                          batch_size=args.qm_batch_size,
-                          system_xml=mm_xml_qm.system_xml)
+    if args.qm_method == "mace":
+        if args.qm_model is None:
+            parser.error("--qm-model is required for --qm-method mace")
+        qmcalc = QMCalculator(pdb_file=args.qm_pdb,
+                              model_path=args.qm_model,
+                              precision=args.qm_precision,
+                              device=args.qm_device,
+                              batch_size=args.qm_batch_size,
+                              system_xml=mm_xml_qm.system_xml)
+    elif args.qm_method == "xtb":
+        qmcalc = XTBCalculator(method=args.xtb_method,
+                               charge=args.xtb_charge,
+                               uhf=args.xtb_uhf)
+    elif args.qm_method == "tblite":
+        qmcalc = TBLiteCalculator(method=args.xtb_method,
+                                  charge=args.xtb_charge,
+                                  uhf=args.xtb_uhf)
 
     mmcalc1 = MMCalculator(mm_xml_qm)
     mmcalc2 = MMCalculator(mm_xml_full)
